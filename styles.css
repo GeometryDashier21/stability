@@ -49,7 +49,7 @@ h3 { font-size: 1.8rem; }
 .splash-mode-card strong { display: block; margin: 6px 0 8px; font-size: 1.2rem; }
 .splash-mode-card p { margin: 0; color: var(--muted); line-height: 1.45; }
 .mode-navigation { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.mode-button { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; min-height: calc(94px * var(--touch-scale)); padding: calc(18px * var(--touch-scale)) calc(20px * var(--touch-scale)); border: 1px solid var(--line); border-radius: 8px; text-align: left; color: var(--ink); background: var(--surface); transition: transform .2s, border-color .2s, background .2s; }
+.mode-button { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 16px; min-height: calc(94px * var(--touch-scale)); padding: calc(18px * var(--touch-scale)) calc(20px * var(--touch-scale)); border: 1px solid var(--line); border-radius: 8px; text-align: left; color: var(--ink); background: var(--surface); transition: transform .2s, border-color .2s, background .2s; }
 .mode-button:hover, .mode-button:focus-visible { transform: translateY(-3px); border-color: var(--teal); }
 .mode-button.is-active { color: white; border-color: var(--ink); background: var(--ink); }
 .mode-number { align-self: start; color: var(--coral); font-size: .8rem; font-weight: 700; }
@@ -65,6 +65,24 @@ h3 { font-size: 1.8rem; }
 .splash-screen .today-note { margin-top: 32px; }
 .open-app-button { margin-top: 28px; }
 .back-button { margin-bottom: 20px; }
+.splash-actions { justify-content: center; gap: 12px; }
+.splash-actions .open-app-button { margin-top: 28px; }
+.card-art { display: grid; place-items: center; width: 72px; height: 72px; margin: 8px 0; border-radius: 16px; background: var(--blue); font-size: 2.6rem; }
+.splash-mode-card:nth-child(2) .card-art { background: #fff8dc; }
+.splash-mode-card:nth-child(3) .card-art { background: #fff0e8; }
+.mode-art { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: rgba(220, 236, 240, .9); font-size: 1.9rem; }
+.feature-icon { margin-right: 10px; font-size: 1.4rem; vertical-align: middle; }
+.feature-art { position: relative; display: flex; align-items: center; justify-content: center; height: 150px; margin-bottom: 26px; overflow: hidden; border-radius: 12px; background: var(--art-bg, var(--blue)); }
+.art-main { font-size: 5.5rem; line-height: 1; }
+.art-accent { position: absolute; font-size: 2rem; opacity: .85; }
+.art-accent-1 { top: 16px; left: 12%; }
+.art-accent-2 { bottom: 14px; left: 28%; }
+.art-accent-3 { top: 20px; right: 14%; }
+.word-detail { max-width: 620px; margin: 18px 0 0; }
+.word-detail h4 { font: 1.8rem "DM Serif Display", Georgia, serif; }
+.word-phonetic { margin-bottom: 8px !important; color: var(--teal-dark) !important; font-weight: 700; }
+.word-detail p { margin: 6px 0; }
+.word-chip { min-height: 48px; padding: 10px 16px; border: 1px solid var(--teal); border-radius: 20px; color: var(--teal-dark); background: var(--blue); font-weight: 700; font-size: 1.15rem; }
 .feature-content { border: 1px solid var(--line); border-radius: 8px; background: rgba(255, 253, 248, .8); }
 .sidebar-heading { padding: 0 8px 20px; border-bottom: 1px solid var(--line); }
 .feature-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 16px 0; max-width: 640px; }

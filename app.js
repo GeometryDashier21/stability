@@ -2,7 +2,6 @@ const modes = {
   cognitive: {
     title: 'Cognitive mode',
     features: [
-      ['access', 'Mental access finder'],
       ['routine', 'Daily routine reminders'],
       ['meds', 'Medication tracker'],
       ['games', 'Cognitive skills games'],
@@ -14,7 +13,6 @@ const modes = {
     title: 'Motor mode',
     features: [
       ['body', 'Body check-in'],
-      ['physical', 'Physical access finder'],
       ['large', 'Large touch layout'],
       ['voice', 'Persistent voice control'],
       ['motorGames', 'Motor games'],
@@ -23,9 +21,9 @@ const modes = {
   speech: {
     title: 'Speech mode',
     features: [
-      ['speechPlaces', 'Speech-friendly places'],
       ['board', 'Conversation board'],
       ['lessons', 'Guided speech lessons'],
+      ['wordBank', 'Word bank'],
     ],
   },
 };
@@ -124,100 +122,41 @@ let mindfulnessComplete = false;
 let mindfulnessFinishing = false;
 let mindfulnessRemaining = 5 * 60;
 
-// Replace with a Google Cloud API key that has the "Places API" enabled (and billing set up) for the shared place finder below.
-const GOOGLE_MAPS_API_KEY = 'YOUR_GOOGLE_MAPS_API_KEY';
-// Shared config for the three accessibility place finders (cognitive, physical, speech) — they all search the same way,
-// they only differ in the search field placeholder and how each result's accessibility note is worded.
-const PLACE_FINDER_MODES = {
-  access: { defaultQuery: 'quiet cafe', note: () => 'Look for calmer environments: check reviews for words like quiet, calm, or low-sensory.' },
-  physical: { defaultQuery: 'pharmacy', note: () => 'Checking accessible entrance info...' },
-  speechPlaces: { defaultQuery: 'pharmacy', note: () => 'Check the listing for a website, menu, or online ordering you can use instead of speaking.' },
-};
-function placeFinderBody({ mode, searchId, resultsId, placeholder, buttonLabel }) {
-  return `<div class="form-stack"><label class="field-label">What kind of place are you looking for?<input id="${searchId}" type="search" placeholder="${placeholder}" /></label><button class="primary-button" data-action="find-places" data-mode="${mode}" data-search-id="${searchId}" data-results-id="${resultsId}" type="button">${buttonLabel}</button><p class="field-hint">Uses your device location and Google Maps to search nearby places.</p><div class="results" id="${resultsId}"></div></div>`;
-}
-let googleMapsLoadPromise = null;
-// Loads the Google Maps JS API (Places library) once and reuses the same promise for every subsequent call.
-function loadGoogleMapsPlaces() {
-  if (window.google && window.google.maps && window.google.maps.places) return Promise.resolve();
-  if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_GOOGLE_MAPS_API_KEY') return Promise.reject(new Error('missing-key'));
-  if (googleMapsLoadPromise) return googleMapsLoadPromise;
-  googleMapsLoadPromise = new Promise((resolve, reject) => {
-    window.__onGoogleMapsLoaded = resolve;
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=__onGoogleMapsLoaded`;
-    script.async = true;
-    script.onerror = () => reject(new Error('load-failed'));
-    document.head.appendChild(script);
-  });
-  return googleMapsLoadPromise;
-}
-const PLACE_FINDER_ERROR_MESSAGES = {
-  'missing-key': 'Nearby place search needs a Google Maps API key with the Places API enabled. Add it to GOOGLE_MAPS_API_KEY in app.js.',
-  'load-failed': 'Could not load Google Maps. Check your internet connection or API key.',
-  'location-denied': 'Location access was denied. Allow location access in your browser to find nearby places.',
-  'location-unsupported': 'This browser does not support location lookup.',
-  'no-results': 'No nearby places found for that search. Try a different search term.',
-};
-function showPlaceFinderError(resultsEl, key) { resultsEl.innerHTML = `<div class="result"><span><strong>Can't search right now</strong><small>${escapeHtml(PLACE_FINDER_ERROR_MESSAGES[key] || 'Something went wrong.')}</small></span></div>`; }
-function placeResultRow(place, mode, config, index) {
-  const rating = place.rating ? `${place.rating}\u2605 (${place.user_ratings_total || 0})` : 'No rating yet';
-  const openNow = place.opening_hours && typeof place.opening_hours.isOpen === 'function' ? (place.opening_hours.isOpen() ? 'Open now' : 'Closed now') : '';
-  return `<div class="result" data-place-index="${index}"><span><strong>${escapeHtml(place.name)}</strong><small>${escapeHtml(place.vicinity || '')}${openNow ? ` \u2022 ${openNow}` : ''}</small><small class="access-note">${escapeHtml(config.note(place))}</small></span><strong>${escapeHtml(rating)}</strong></div>`;
-}
-// Physical mode additionally looks up each result's wheelchair-accessible-entrance flag, which only Place Details (not Nearby Search) exposes.
-function renderPlaceResults(resultsEl, places, mode, config, service) {
-  resultsEl.innerHTML = places.map((place, index) => placeResultRow(place, mode, config, index)).join('');
-  if (mode !== 'physical') return;
-  places.forEach((place, index) => {
-    service.getDetails({ placeId: place.place_id, fields: ['wheelchair_accessible_entrance'] }, (details, status) => {
-      const noteEl = resultsEl.querySelector(`[data-place-index="${index}"] .access-note`);
-      if (!noteEl) return;
-      const accessible = status === google.maps.places.PlacesServiceStatus.OK ? details.wheelchair_accessible_entrance : undefined;
-      noteEl.textContent = accessible === true ? 'Wheelchair-accessible entrance reported.' : accessible === false ? 'No wheelchair-accessible entrance reported.' : 'Accessible entrance info not reported by Google; call ahead to confirm.';
-    });
-  });
-}
-// Shared handler for the cognitive, physical, and speech place finders: same geolocation + Google Places search, different copy per mode.
-function findNearbyPlaces(mode, searchId, resultsId) {
-  const config = PLACE_FINDER_MODES[mode];
-  const resultsEl = document.getElementById(resultsId);
-  const searchEl = document.getElementById(searchId);
-  if (!config || !resultsEl) return;
-  const query = (searchEl && searchEl.value.trim()) || config.defaultQuery;
-  resultsEl.innerHTML = '<div class="result"><span><strong>Finding nearby places...</strong></span></div>';
-  loadGoogleMapsPlaces().then(() => {
-    if (!navigator.geolocation) { showPlaceFinderError(resultsEl, 'location-unsupported'); return; }
-    navigator.geolocation.getCurrentPosition((position) => {
-      const location = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
-      const service = new google.maps.places.PlacesService(document.createElement('div'));
-      service.nearbySearch({ location, radius: 8000, keyword: query }, (results, status) => {
-        if (status !== google.maps.places.PlacesServiceStatus.OK || !results.length) { showPlaceFinderError(resultsEl, 'no-results'); return; }
-        renderPlaceResults(resultsEl, results.slice(0, 6), mode, config, service);
-      });
-    }, () => showPlaceFinderError(resultsEl, 'location-denied'));
-  }).catch((error) => showPlaceFinderError(resultsEl, error.message === 'missing-key' ? 'missing-key' : 'load-failed'));
-}
-
 const featureContent = {
-  access: { kicker: 'Cognitive mode / 01', title: 'Find places that feel easier to use.', lede: 'A simple signal for mental and cognitive accessibility. Look for calmer, clearer environments that match what you need today.', body: placeFinderBody({ mode: 'access', searchId: 'placeSearch', resultsId: 'placeResults', placeholder: 'Library, cafe, clinic...', buttonLabel: 'Find supportive places' }) },
   routine: { kicker: 'Cognitive mode / 02', title: 'Keep the next thing close.', lede: 'Set a small reminder for a routine. It will stay on this device and can ask for notification permission when needed.', body: '<form class="form-stack" id="routineForm"><label class="field-label">Routine name<input name="name" required placeholder="Get ready for bed" /></label><label class="field-label">Time<input name="time" type="time" required /></label><button class="primary-button" type="submit">Add routine reminder</button></form><div class="results" id="routineResults"></div>' },
   meds: { kicker: 'Cognitive mode / 03', title: 'A gentle nudge for medication.', lede: 'Track a medication and its scheduled time. This tool supports memory; it does not replace advice from a doctor or pharmacist.', body: '<form class="form-stack" id="medForm"><label class="field-label">Medication name<input name="name" required placeholder="Medication name" /></label><label class="field-label">Dose note<input name="dose" placeholder="Optional dose or instruction" /></label><label class="field-label">Reminder time<input name="time" type="time" required /></label><button class="primary-button" type="submit">Save medication reminder</button></form><div class="results" id="medResults"></div>' },
   games: { kicker: 'Cognitive mode / 04', title: 'Practice a skill, one round at a time.', lede: 'Choose a memory game to practice. This is practice, not a medical assessment.', body: '<div class="game-selector" role="group" aria-label="Choose a cognitive game"><button class="choice-button" data-game="number" type="button">Number memory</button><button class="choice-button" data-game="items" type="button">Item recall</button></div><div class="tool-card memory-game" id="numberGame" hidden><div class="memory-game-heading"><h4>Number memory</h4><div class="memory-game-stats"><span id="gameBest">Best: 0</span><span id="gameLevel">4 numbers</span></div></div><p id="gamePrompt">Press start to see your first sequence.</p><div class="number-sequence" id="gameSequence" aria-live="polite"></div><label class="field-label memory-answer" for="gameAnswer">Type the numbers in order<input id="gameAnswer" type="text" inputmode="numeric" autocomplete="off" disabled /></label><p class="game-feedback" id="gameResult" aria-live="polite"></p><div class="action-row"><button class="primary-button" data-action="start-game" type="button">Start game</button></div><div class="item-game-over" id="numberGameOver" hidden><strong id="numberGameOverTitle">Round Over</strong><span id="numberGameOverDetail">You lost.</span><p id="numberGameOverScore"></p></div></div><div class="tool-card item-game" id="itemGame" hidden><div class="memory-game-heading"><h4>Item recall</h4><div class="memory-game-stats"><span id="itemBest">Best: 0 / 10</span><span id="itemScore">0 / 10 correct</span></div></div><p id="itemPrompt">Press start to open the chest and study the items.</p><div class="item-display" id="itemDisplay"><div class="item-chest" aria-hidden="true">&#128081;</div><div class="item-countdown" id="itemCountdown">30</div><ul class="item-list" id="itemList"></ul></div><div class="item-game-over" id="itemGameOver" hidden><strong id="itemGameOverTitle">Game Over</strong><span id="itemGameOverDetail">That item was not in the chest.</span><p id="itemGameOverScore"></p></div><form class="form-stack item-answer" id="itemRecallForm" hidden><label class="field-label" for="itemAnswer">Name an item you remember<input id="itemAnswer" type="text" autocomplete="off" /></label><p class="game-feedback" id="itemResult" aria-live="polite"></p><button class="primary-button" type="submit">Submit item</button></form><div class="action-row"><button class="primary-button" data-action="start-items" type="button">Start game</button></div></div>' },
   mood: { kicker: 'Cognitive mode / 05', title: 'Check in with yourself.', lede: 'Choose the feeling that is closest right now. Each time you pick it, you will get a different small, optional exercise to support your next moment.', body: '<div class="choice-grid" id="moodChoices"><button class="choice-button" data-mood="happy" type="button">Happy</button><button class="choice-button" data-mood="sad" type="button">Sad</button><button class="choice-button" data-mood="calm" type="button">Calm</button><button class="choice-button" data-mood="overwhelmed" type="button">Overwhelmed</button><button class="choice-button" data-mood="tired" type="button">Tired</button><button class="choice-button" data-mood="angry" type="button">Angry</button><button class="choice-button" data-mood="stressed" type="button">Stressed</button><button class="choice-button" data-mood="excited" type="button">Excited</button><button class="choice-button" data-mood="nervous" type="button">Nervous</button></div><div class="tool-card" id="moodResult" hidden><h4>Your small next step</h4><p></p></div>' },
   mindfulness: { kicker: 'Cognitive mode / 06', title: 'Make a little room to arrive.', lede: 'Choose a practice and a length that feels manageable. You can pause or reset whenever you need to.', body: '<div class="mindfulness-controls"><label class="field-label" for="mindfulnessExercise">Practice<select id="mindfulnessExercise"><option value="breathing">Guided breathing</option><option value="bodyScan">Body scan</option><option value="focus">Sensory focus</option></select></label><label class="field-label" for="mindfulnessDuration">Practice length<select id="mindfulnessDuration"><option value="1">1 minute</option><option value="3">3 minutes</option><option value="5" selected>5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></label><label class="field-label" for="mindfulnessBreathLength">Breath length (inhale and exhale)<select id="mindfulnessBreathLength"><option value="3">3 seconds</option><option value="4" selected>4 seconds</option><option value="5">5 seconds</option><option value="6">6 seconds</option><option value="8">8 seconds</option></select></label></div><div class="mindfulness-stage" id="mindfulnessStage" data-exercise="breathing" data-running="false" role="img" aria-label="Guided breathing animation"><div class="mindfulness-orbit" aria-hidden="true"></div><div class="mindfulness-core" aria-hidden="true"></div><div class="mindfulness-body-figure" aria-hidden="true"><i class="body-head"></i><i class="body-neck"></i><i class="body-torso"></i><i class="body-arm body-arm-left"></i><i class="body-arm body-arm-right"></i><i class="body-leg body-leg-left"></i><i class="body-leg body-leg-right"></i></div><div class="mindfulness-focus-scene" aria-hidden="true"><i class="focus-object focus-object-one"></i><i class="focus-object focus-object-two"></i><i class="focus-object focus-object-three"></i><i class="focus-object focus-object-four"></i><i class="focus-object focus-object-five"></i></div><div class="mindfulness-sparks" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="mindfulness-readout"><strong id="mindfulnessTime">05:00</strong><span id="mindfulnessPhase">Ready when you are.</span></div><div class="action-row"><button class="primary-button" id="mindfulnessStart" type="button">Start practice</button><button class="secondary-button" id="mindfulnessReset" type="button">Reset</button></div><p class="mindfulness-status" id="mindfulnessStatus" aria-live="polite">Choose start when you feel ready.</p>' },
   body: { kicker: 'Motor mode / 01', title: 'Tell us what your body needs today.', lede: 'Choose every area that feels less comfortable and every area that feels strong. Each pick draws a different real exercise or stretch from a varied pool, so it will not repeat the same suggestion each time.', body: '<div class="choice-grid" id="bodyChoices"><button class="choice-button" data-body="Neck" type="button">Neck</button><button class="choice-button" data-body="Shoulders" type="button">Shoulders</button><button class="choice-button" data-body="Elbows" type="button">Elbows</button><button class="choice-button" data-body="Wrists" type="button">Wrists</button><button class="choice-button" data-body="Hands" type="button">Hands</button><button class="choice-button" data-body="Back" type="button">Back</button><button class="choice-button" data-body="Hips" type="button">Hips</button><button class="choice-button" data-body="Knees" type="button">Knees</button><button class="choice-button" data-body="Ankles" type="button">Ankles</button><button class="choice-button" data-body="Feet" type="button">Feet</button></div><button class="primary-button" data-action="mobility" type="button">Suggest mobility support</button><div class="tool-card" id="mobilityResult" hidden><h4>Your suggested stretch</h4><div class="mobility-cards" id="mobilityCards"></div></div>' },
-  physical: { kicker: 'Motor mode / 02', title: 'Know what access looks like before you go.', lede: 'Find nearby places and check which ones report a wheelchair-accessible entrance.', body: placeFinderBody({ mode: 'physical', searchId: 'physicalSearch', resultsId: 'physicalResults', placeholder: 'Pharmacy, store, clinic...', buttonLabel: 'Find physically accessible places' }) },
   large: { kicker: 'Motor mode / 03', title: 'More room. More control.', lede: 'Motor Mode is designed with bigger targets and more separation for people with tremors or reduced fine motor control.', body: '<div class="tool-card"><h4>Large touch layout</h4><p>Tap the plus or minus button to make every button and control across the app bigger or smaller. Your choice is saved on this device.</p><div class="touch-scale-control"><div class="touch-scale-buttons"><button class="touch-scale-button" id="touchScaleMinus" type="button" aria-label="Make touch targets smaller">&minus;</button><div class="meter"><span id="touchScaleMeter"></span></div><button class="touch-scale-button" id="touchScalePlus" type="button" aria-label="Make touch targets bigger">+</button></div><p id="touchScaleLabel"></p></div></div>' },
   voice: { kicker: 'Motor mode / 04', title: 'Use your voice when touch is hard.', lede: 'The voice button stays at the top of the app. Try it now, or use the button below to test browser voice recognition.', body: '<div class="tool-card"><h4>Voice control</h4><p>Say “cognitive mode”, “motor mode”, or “speech mode” to jump straight there. Tap the button again to stop listening. Allow microphone access for this site if your browser asks.</p><p class="field-hint">Works in Chrome or Edge on a computer or Android phone; needs the app served over https:// or localhost. No browser on iPhone/iPad supports this yet.</p><div class="action-row"><button class="primary-button" data-action="listen" type="button">Start listening</button></div></div>' },
   motorGames: { kicker: 'Motor mode / 05', title: 'Sharpen your speed and steady control.', lede: 'Choose a motor game: Whack-a-mole tests reaction speed, and Precision drawing tests steady, accurate control. Whack moles with your mouse cursor or a screen tap, or trace a randomized guide shape as closely as you can before time runs out. This is practice, not a medical assessment.', body: '<div class="game-selector" role="group" aria-label="Choose a motor game"><button class="choice-button" data-motor-game="whack" type="button">Whack-a-mole</button><button class="choice-button" data-motor-game="draw" type="button">Precision drawing</button></div><div class="tool-card motor-game" id="motorWhackGame"><div class="memory-game-heading"><h4>Whack-a-mole</h4><div class="memory-game-stats"><span id="motorBest">Best: 0 moles</span><span id="motorLevelLabel">Level 1 of 10</span><span id="motorClock">0:30</span><span id="motorStrikes">Strikes: 0 / 5</span></div></div><p>How to play: whack each mole with your mouse cursor or a screen tap before it disappears. Missing a mole costs one strike, and strikes carry over between levels. Run out of all 5 strikes and the game ends, so clear all 10 levels before that happens.</p><p id="motorPrompt">Press start to begin level 1. Whack moles the moment they appear!</p><div class="motor-board" id="motorBoard"></div><p class="game-feedback" id="motorResult" aria-live="polite"></p><div class="action-row"><button class="primary-button" data-action="start-motor" type="button">Start game</button></div><div class="item-game-over" id="motorGameOver" hidden><strong id="motorGameOverTitle">Round Over</strong><span id="motorGameOverDetail"></span><p id="motorGameOverScore"></p></div></div><div class="tool-card motor-game" id="motorDrawGame" hidden><div class="memory-game-heading"><h4>Precision drawing</h4><div class="memory-game-stats"><span id="drawBest">Best: 0 levels cleared</span><span id="drawLevelLabel">Level 1 of 6</span><span id="drawClock">Study: 10s</span></div></div><p>How to play: study the thick, see-through guide shape, then trace over it as closely as you can with your mouse or a screen tap before time runs out. Press Confirm drawing when you are done. You need 90% accuracy to clear each level. The guide gets thinner, the shapes get longer, and the clocks get shorter as you go.</p><p id="drawPrompt">Press start to see level 1 shape.</p><div class="motor-board draw-board" id="drawBoard"><canvas id="drawCanvas"></canvas><div class="draw-phase-badge" id="drawPhaseBadge"></div><div class="draw-pass-overlay" id="drawPassOverlay" hidden></div></div><p class="game-feedback" id="drawResult" aria-live="polite"></p><div class="action-row"><button class="primary-button" data-action="start-draw" type="button">Start game</button><button class="secondary-button" data-action="clear-draw" type="button">Clear drawing</button><button class="primary-button" data-action="confirm-draw" type="button">Confirm drawing</button></div><div class="item-game-over" id="drawGameOver" hidden><strong id="drawGameOverTitle">Round Over</strong><span id="drawGameOverDetail"></span><p id="drawGameOverScore"></p></div></div>' },
-  speechPlaces: { kicker: 'Speech mode / 01', title: 'Find places where communication can be easier.', lede: 'Look for services that offer written options, patient communication, or tools that do not require speech to be perfect.', body: placeFinderBody({ mode: 'speechPlaces', searchId: 'speechSearch', resultsId: 'speechResults', placeholder: 'Pharmacy, cafe, service desk...', buttonLabel: 'Find speech-friendly places' }) },
   board: { kicker: 'Speech mode / 02', title: 'Let the app say it for you.', lede: 'Type a message or choose a saved quick response. The browser will read it aloud so you can stay part of the conversation.', body: '<div class="form-stack"><label class="field-label">Your message<textarea id="speechText" placeholder="Type what you want to say..."></textarea></label><div class="action-row"><button class="primary-button" data-action="speak-text" type="button">Speak this aloud</button><button class="secondary-button" data-action="save-phrase" type="button">Save as quick response</button></div><div class="results" id="phraseResults"></div><div class="tool-card voice-picker"><h4>Conversation voice</h4><p>Pick a voice, test how it sounds, then choose it as your conversation board voice. You can change it again at any time, even after choosing one.</p><p class="voice-locked-label" id="voiceLockedLabel"></p><label class="field-label" for="voiceSelect">Voice<select id="voiceSelect"></select></label><div class="action-row"><button class="secondary-button" id="voiceTestButton" type="button">Test voice</button><button class="primary-button" id="voiceChooseButton" type="button">Choose voice</button></div></div></div>' },
   lessons: { kicker: 'Speech mode / 03', title: 'See it. Hear it. Try it.', lede: 'Practice each mouth movement in a word, then listen at a speed that feels comfortable.', body: '<div class="lesson-controls"><label class="field-label" for="lessonSet">Word set<select id="lessonSet"></select></label><label class="field-label" for="lessonSpeed">Playback speed<select id="lessonSpeed"><option value="0.25">0.25x very slow</option><option value="0.5">0.5x slower</option><option value="1" selected>1x normal</option><option value="1.5">1.5x faster</option><option value="2">2x fastest</option></select></label></div><div class="mouth-lesson" aria-live="polite"><div class="mouth-preview"><div class="mouth-demo" id="mouthDemo" aria-label="Mouth formation for the current sound"><span class="mouth-lips"></span><span class="mouth-teeth"></span><span class="mouth-tongue"></span></div><div class="mouth-legend" aria-label="Mouth formation color legend"><span><i class="legend-swatch legend-mouth"></i>Red - mouth</span><span><i class="legend-swatch legend-tongue"></i>Pink - tongue</span><span><i class="legend-swatch legend-lips"></i>Grey - lips</span></div></div><div class="lesson-parts" id="lessonParts"></div></div><div class="tool-card"><div class="memory-game-heading"><h4 id="lessonWord">Mango</h4><span id="lessonProgress">1 of 20</span></div><p id="lessonPartHint">Select a sound part to see how the mouth moves.</p><div class="action-row"><button class="primary-button" data-action="speak-lesson" type="button">Play word aloud</button><button class="secondary-button" data-action="next-lesson" type="button">Next word</button></div></div>' },
+  wordBank: { title: 'Collect the words you are learning.', lede: 'Add any word that feels hard or new. Tap a saved word to hear how it is pronounced and read what it means.', body: '<form class="form-stack" id="wordForm"><label class="field-label" for="wordInput">Hard word<input id="wordInput" name="word" required maxlength="40" autocomplete="off" placeholder="Type a word..." /></label><button class="primary-button" type="submit">Add to word bank</button></form><div class="tool-card word-detail" id="wordDetail" hidden aria-live="polite"><h4 id="wordDetailTitle"></h4><p class="word-phonetic" id="wordDetailPhonetic"></p><div id="wordDetailMeaning"></div><div class="action-row"><button class="primary-button" data-word-hear="1" type="button">Hear it</button><button class="secondary-button" data-word-hear="0.5" type="button">Hear it slowly</button></div></div><div class="results" id="wordList"></div>' },
 };
 
+const cp = (...codes) => codes.map((code) => String.fromCodePoint(code));
+// [main picture, banner color, three small accent pictures] for each tool page and button.
+const FEATURE_ART = {
+  routine: [cp(0x23F0)[0], '#fff0e8', cp(0x1F305, 0x2705, 0x2728)],
+  meds: [cp(0x1F48A)[0], '#eafbf3', cp(0x1FA7A, 0x1F4A7, 0x2728)],
+  games: [cp(0x1F9E9)[0], '#fff8dc', cp(0x1F9E0, 0x1F3B2, 0x2B50)],
+  mood: [cp(0x1F308)[0], '#dcecf0', cp(0x1F60A, 0x2601, 0x1F495)],
+  mindfulness: [cp(0x1F33F)[0], '#eafbf3', cp(0x1F338, 0x1F9D8, 0x1F343)],
+  body: [cp(0x1F9D8)[0], '#fff0e8', cp(0x1F4AA, 0x1F9B5, 0x2728)],
+  large: [cp(0x1F50D)[0], '#dcecf0', cp(0x1F446, 0x2795, 0x2B50)],
+  voice: [cp(0x1F3A4)[0], '#fff8dc', cp(0x1F50A, 0x1F4AC, 0x2728)],
+  motorGames: [cp(0x1F3AF)[0], '#eafbf3', cp(0x1F528, 0x1F3C6, 0x2B50)],
+  board: [cp(0x1F4AC)[0], '#dcecf0', cp(0x1F5E8, 0x1F44B, 0x1F50A)],
+  lessons: [cp(0x1F444)[0], '#fff0e8', cp(0x1F442, 0x1F4D6, 0x2728)],
+  wordBank: [cp(0x1F4DA)[0], '#fff8dc', cp(0x1F4DD, 0x1F4A1, 0x2B50)],
+};
+function featureArtHtml(id) { const art = FEATURE_ART[id]; if (!art) return ''; return `<div class="feature-art" style="--art-bg:${art[1]}" aria-hidden="true"><span class="art-accent art-accent-1">${art[2][0]}</span><span class="art-accent art-accent-2">${art[2][1]}</span><span class="art-accent art-accent-3">${art[2][2]}</span><span class="art-main">${art[0]}</span></div>`; }
+
 let activeMode = 'cognitive';
-let activeFeature = 'access';
+let activeFeature = 'routine';
 let gamePattern = [];
 let gameLength = 4;
 let itemRoundItems = [];
@@ -777,7 +716,7 @@ function renderVoicePicker() {
   select.value = lockedId && getVoiceProfile(lockedId) ? lockedId : VOICE_PROFILES[0].id;
   updateVoiceChooseButton();
 }
-function renderFeatureList() { const list = $('#featureList'); list.innerHTML = modes[activeMode].features.map(([id, label]) => `<button class="feature-button ${id === activeFeature ? 'is-active' : ''}" data-feature="${id}" type="button">${label}</button>`).join(''); $('#modeTitle').textContent = modes[activeMode].title; }
+function renderFeatureList() { const list = $('#featureList'); list.innerHTML = modes[activeMode].features.map(([id, label]) => `<button class="feature-button ${id === activeFeature ? 'is-active' : ''}" data-feature="${id}" type="button"><span class="feature-icon" aria-hidden="true">${FEATURE_ART[id] ? FEATURE_ART[id][0] : ''}</span>${label}</button>`).join(''); $('#modeTitle').textContent = modes[activeMode].title; }
 function renderMindfulnessMarkup() {
   const controls = $('#mindfulnessExercise')?.closest('.mindfulness-controls');
   const stage = $('#mindfulnessStage');
@@ -791,13 +730,60 @@ function renderMindfulnessMarkup() {
 function renderMindfulnessFocusObjects() { const scene = $('#mindfulnessStage .mindfulness-focus-scene'); if (!scene) return; const count = 7 + Math.floor(Math.random() * 7); scene.innerHTML = Array.from({ length: count }, (_, index) => `<i class="focus-object focus-object-${index + 1}" style="--object-x:${Math.round(Math.random() * 260 - 130)}px;--object-y:${Math.round(Math.random() * 150 - 75)}px;--object-speed:${(7 + Math.random() * 14).toFixed(1)}s;--object-delay:-${(Math.random() * 12).toFixed(1)}s;--object-scale:${(0.65 + Math.random() * 1.4).toFixed(2)}"></i>`).join(''); }
 function updateMindfulnessStepper(target, value) { const element = target === 'duration' ? $('#mindfulnessDuration') : $('#mindfulnessBreathLength'); if (element) element.textContent = target === 'duration' ? `${value} minute${value === 1 ? '' : 's'}` : `${value} second${value === 1 ? '' : 's'}`; document.querySelectorAll(`[data-mindfulness-step="${target}"]`).forEach((button) => { const min = target === 'duration' ? 1 : 3; const max = target === 'duration' ? 30 : 8; button.disabled = (button.dataset.step === '-1' && value <= min) || (button.dataset.step === '1' && value >= max); }); }
 function stepMindfulnessValue(target, delta) { const element = target === 'duration' ? $('#mindfulnessDuration') : $('#mindfulnessBreathLength'); if (!element) return; const current = Number.parseInt(element.textContent, 10); const min = target === 'duration' ? 1 : 3; const max = target === 'duration' ? 30 : 8; const next = Math.min(max, Math.max(min, current + delta)); updateMindfulnessStepper(target, next); resetMindfulnessTimer(); }
-function renderContent() { const feature = featureContent[activeFeature]; $('#featureContent').innerHTML = `<p class="feature-kicker">${feature.kicker}</p><h3>${feature.title}</h3><p class="feature-lede">${feature.lede}</p>${feature.body}`; if (activeFeature === 'mindfulness') renderMindfulnessMarkup(); bindFeatureEvents(); }
+function renderContent() { const feature = featureContent[activeFeature]; const position = modes[activeMode].features.findIndex(([id]) => id === activeFeature) + 1; const kicker = `${modes[activeMode].title} / ${String(position).padStart(2, '0')}`; $('#featureContent').innerHTML = `${featureArtHtml(activeFeature)}<p class="feature-kicker">${kicker}</p><h3>${feature.title}</h3><p class="feature-lede">${feature.lede}</p>${feature.body}`; if (activeFeature === 'mindfulness') renderMindfulnessMarkup(); bindFeatureEvents(); }
 function showScreen(name) { document.querySelectorAll('.screen').forEach((screen) => { screen.hidden = screen.id !== `screen${name}`; }); window.scrollTo(0, 0); }
 function openApp() { showScreen('Modes'); }
 function backToModes() { showScreen('Modes'); }
 function backToFeatures() { showScreen('Features'); }
 function selectMode(mode) { activeMode = mode; activeFeature = modes[mode].features[0][0]; document.querySelectorAll('.mode-button').forEach((button) => button.classList.toggle('is-active', button.dataset.mode === mode)); renderFeatureList(); showScreen('Features'); }
 function selectFeature(feature) { activeFeature = feature; renderFeatureList(); renderContent(); showScreen('Content'); }
+const WORD_BANK_KEY = 'openpath-wordbank';
+let wordLookupToken = 0;
+function renderWordBank() {
+  const list = $('#wordList'); if (!list) return;
+  const words = getStoredItems(WORD_BANK_KEY);
+  list.innerHTML = words.length ? words.map((item) => `<div class="result"><button class="word-chip" data-word-open="${escapeHtml(item.name)}" type="button">${escapeHtml(item.name)}</button><button class="secondary-button" data-word-remove="${escapeHtml(item.id)}" type="button" aria-label="Remove ${escapeHtml(item.name)}">Remove</button></div>`).join('') : '<p class="feature-lede">No words yet. Add a hard word above.</p>';
+}
+async function showWordDetail(word) {
+  const token = ++wordLookupToken;
+  const panel = $('#wordDetail'); if (!panel) return;
+  panel.hidden = false; panel.dataset.word = word;
+  $('#wordDetailTitle').textContent = word;
+  $('#wordDetailPhonetic').textContent = '';
+  $('#wordDetailMeaning').innerHTML = '<p>Looking up the meaning...</p>';
+  speak(word, 1, getLockedVoiceId());
+  try {
+    const response = await fetch(`https://api.dictionaryapi.dev/v2/entries/en/${encodeURIComponent(word)}`);
+    if (!response.ok) throw new Error('not-found');
+    const entry = (await response.json())[0];
+    if (token !== wordLookupToken) return;
+    const phonetic = entry.phonetic || (entry.phonetics.find((item) => item.text) || {}).text || '';
+    $('#wordDetailPhonetic').textContent = phonetic ? `Sounds like: ${phonetic}` : '';
+    $('#wordDetailMeaning').innerHTML = entry.meanings.slice(0, 3).map((meaning) => `<p><strong>${escapeHtml(meaning.partOfSpeech)}</strong>: ${escapeHtml(meaning.definitions[0].definition)}</p>`).join('');
+  } catch (error) {
+    if (token !== wordLookupToken) return;
+    $('#wordDetailMeaning').innerHTML = '<p>No definition found. Check the spelling, or check your internet connection. You can still hear the word.</p>';
+  }
+}
+function bindWordBank() {
+  const form = $('#wordForm'); if (!form) return;
+  renderWordBank();
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const word = new FormData(form).get('word').trim();
+    if (!word) return;
+    if (getStoredItems(WORD_BANK_KEY).some((item) => item.name.toLowerCase() === word.toLowerCase())) { showToast('That word is already in your word bank.'); return; }
+    saveStored(WORD_BANK_KEY, word, '');
+    form.reset(); renderWordBank(); showToast('Word added to your word bank.');
+  });
+  $('#wordList').addEventListener('click', (event) => {
+    const open = event.target.closest('[data-word-open]');
+    if (open) { showWordDetail(open.dataset.wordOpen); return; }
+    const remove = event.target.closest('[data-word-remove]');
+    if (remove) { localStorage.setItem(WORD_BANK_KEY, JSON.stringify(getStoredItems(WORD_BANK_KEY).filter((item) => item.id !== remove.dataset.wordRemove))); renderWordBank(); }
+  });
+  document.querySelectorAll('[data-word-hear]').forEach((button) => button.addEventListener('click', () => speak($('#wordDetail').dataset.word, button.dataset.wordHear, getLockedVoiceId())));
+}
 function getStoredItems(key) { return JSON.parse(localStorage.getItem(key) || '[]'); }
 function renderStoredList(key, target, emptyText) { const items = getStoredItems(key); const element = $(target); if (!element) return; element.innerHTML = items.length ? items.map((item) => { const phraseButton = key === 'openpath-phrases' ? `<button class="quick-response saved-quick-response" data-speak-saved="${escapeHtml(item.name)}" type="button">${escapeHtml(item.name)}</button>` : `<strong>${escapeHtml(item.name)}</strong>`; return `<div class="result"><span>${phraseButton}<small>${escapeHtml(item.detail)}</small></span><button class="secondary-button" data-remove="${key}:${item.id}" type="button">Remove</button></div>`; }).join('') : `<p class="feature-lede">${emptyText}</p>`; }
 function saveStored(key, name, detail, time, dose) { const items = getStoredItems(key); items.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, detail, time, dose }); localStorage.setItem(key, JSON.stringify(items)); }
@@ -873,7 +859,7 @@ function applyTouchScale(percent) { document.documentElement.style.setProperty('
 function bindFeatureEvents() {
   if (activeFeature !== 'motorGames' && motorGameActive) { motorGameActive = false; clearMotorTimers(); }
   if (activeFeature !== 'motorGames' && motorDrawActive) { motorDrawActive = false; clearDrawTimers(); }
-  document.querySelectorAll('[data-action="find-places"]').forEach((button) => button.addEventListener('click', () => findNearbyPlaces(button.dataset.mode, button.dataset.searchId, button.dataset.resultsId)));
+  bindWordBank();
   const routineForm = $('#routineForm'); if (routineForm) { renderStoredList('openpath-routines', '#routineResults', 'No routines yet. Add one above to keep the next step visible.'); routineForm.addEventListener('submit', async (event) => { event.preventDefault(); const data = new FormData(routineForm); const time = data.get('time'); saveStored('openpath-routines', data.get('name'), `Reminder at ${time}`, time); scheduleStoredReminders(); await requestReminderPermission(); renderStoredList('openpath-routines', '#routineResults', 'No routines yet.'); showToast('Routine reminder saved on this device.'); }); }
   const medForm = $('#medForm'); if (medForm) { renderStoredList('openpath-meds', '#medResults', 'No medication reminders yet.'); medForm.addEventListener('submit', async (event) => { event.preventDefault(); const data = new FormData(medForm); const time = data.get('time'); const dose = data.get('dose') || 'Dose reminder'; saveStored('openpath-meds', data.get('name'), `${dose} at ${time}`, time, dose); scheduleStoredReminders(); await requestReminderPermission(); renderStoredList('openpath-meds', '#medResults', 'No medication reminders yet.'); showToast('Medication reminder saved on this device.'); }); }
   document.querySelectorAll('[data-mood]').forEach((button) => button.addEventListener('click', () => { document.querySelectorAll('[data-mood]').forEach((item) => item.classList.remove('is-selected')); button.classList.add('is-selected'); const result = $('#moodResult'); result.hidden = false; result.querySelector('p').textContent = nextMoodSuggestion(button.dataset.mood); }));
@@ -1052,6 +1038,8 @@ function startVoiceControl() {
 document.querySelectorAll('.mode-button').forEach((button) => button.addEventListener('click', () => selectMode(button.dataset.mode)));
 document.addEventListener('click', (event) => { const feature = event.target.closest('[data-feature]'); if (feature) selectFeature(feature.dataset.feature); });
 $('#openAppButton').addEventListener('click', openApp);
+$('#aboutAppButton').addEventListener('click', () => showScreen('About'));
+document.addEventListener('click', (event) => { if (event.target.closest('[data-action="back-to-home"]')) showScreen('Splash'); });
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-action="back-to-modes"]'); if (button) backToModes(); });
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-action="back-to-features"]'); if (button) backToFeatures(); });
 document.addEventListener('click', (event) => { const button = event.target.closest('[data-speak-saved]'); if (!button) return; $('#speechText').value = button.dataset.speakSaved; speak(button.dataset.speakSaved, 1, getLockedVoiceId()); });

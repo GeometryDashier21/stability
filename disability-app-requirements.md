@@ -19,7 +19,7 @@ The application, named Stability, will provide people with disabilities differen
 - The app is named Stability. The name appears prominently in the header brand mark at the top of the app (and in the browser tab title) so it is clearly visible as soon as the app loads.
 - The small tagline text shown under the "Stability" brand name, and used alongside the name in the browser tab title, reads "your disability assistant".
 - On the splash screen, "Stability" is shown again as a large, centered headline in the middle of the page (distinct from the smaller header brand mark), with the "A calmer way through the day" tagline displayed beneath it in a larger, bolded style so it reads as the app's slogan/catchphrase.
-- Below the "Open app" button, the splash screen shows a short "Three modes, one app" section with one card per mode (Cognitive, Motor, Speech), each giving a brief, plain-language description of who the mode is for and the kinds of tools it includes, so a new user understands what each mode offers before opening the app.
+- The splash screen has two buttons: "Open app" and "About the App". "About the App" opens its own full screen (with a "Back to home" button) showing a short "Three modes, one app" section with one card per mode (Cognitive, Motor, Speech), each giving a brief, plain-language description of who the mode is for and the kinds of tools it includes, so a new user understands what each mode offers without scrolling the home page.
 
 ## Navigation And Organization
 
@@ -41,12 +41,6 @@ The app will initially support needs associated with these categories:
 ## Features And Functionalities
 
 ### Cognitive Mode
-
-#### Mental And Cognitive Accessibility Indicator
-
-- The app will help users find nearby places that tend to be calmer and easier to navigate for people with mental or cognitive disabilities, using the shared nearby-place finder described below.
-- Each result includes a short cognitive-accessibility note (e.g. what to check for, such as quieter hours or clearer signage) rather than only a place name and rating.
-- The criteria used to judge cognitive/mental accessibility beyond the search note are to be defined.
 
 #### Daily Routine Reminders
 
@@ -152,12 +146,6 @@ The app will initially support needs associated with these categories:
 - The goal is to help users manage discomfort, reduce stiffness, and support overall mobility through guided movement.
 - The exact pain levels and recommendation logic beyond area selection are to be defined.
 
-#### Physical Accessibility Indicator
-
-- The app will help users find nearby places and check which ones report a wheelchair-accessible entrance, using the shared nearby-place finder described below.
-- Each result shows Google's reported wheelchair-accessible-entrance status (accessible, not accessible, or not reported) as its accessibility note.
-- Additional accessibility features beyond entrance accessibility (ramps, wide paths, seating, layout) are to be defined and are not currently sourced from Google Places.
-
 #### Large Touch Targets And Expanded Layout
 
 - Motor Mode will use a larger layout and more spacious interface design for users with tremors or reduced fine motor control.
@@ -211,11 +199,6 @@ The app will initially support needs associated with these categories:
 
 ### Speech Mode
 
-#### Speech-Friendly Place Finder
-
-- The app will help users find nearby places, using the shared nearby-place finder described below, with a note encouraging the user to look for a website, menu, or online ordering they can use instead of speaking.
-- The exact criteria for verifying a speech-friendly environment beyond this note are to be defined.
-
 #### Text-To-Speech Conversation Board
 
 - The app will provide a conversation interface with a text bubble where users can type what they want to say.
@@ -247,23 +230,27 @@ The app will initially support needs associated with these categories:
 - Lessons should support step-by-step practice at a pace chosen by the user.
 - The exact mouth-formation visuals, lesson content, word library, progression, and feedback methods are to be defined.
 
+#### Word Bank
+
+- Speech Mode provides a Word bank where users add hard or unfamiliar words they are learning; words are saved on the device, duplicates are rejected, and any word can be removed.
+- Tapping a saved word speaks it aloud (using the chosen conversation voice, if any) and shows its phonetic spelling and up to three definitions, looked up from the free Dictionary API (api.dictionaryapi.dev).
+- The detail panel offers "Hear it" and "Hear it slowly" buttons to replay the pronunciation.
+- If no definition is found or the user is offline, a plain-language message is shown and the word can still be heard.
+
+#### Imagery
+
+- Each mode card (About screen and mode-selection screen) has its own picture; the splash screen has no images under the "Stability" title.
+- Every tool button in the feature list has an icon, and every tool page opens with a colored illustrated banner with accent pictures.
+- Images are decorative (hidden from screen readers) and use emoji so no extra assets are loaded.
+
 ## Technical Considerations
-
-### Shared Nearby-Place Finder (Cognitive, Physical, Speech Modes)
-
-- The Mental Access Finder, Physical Access Finder, and Speech-Friendly Place Finder are three mode-specific views of the same underlying tool: they all search for nearby places using the user's device location and the Google Places API, and only differ in search placeholder text and the wording of each result's accessibility note.
-- The user enters an optional search term (e.g. "library", "pharmacy"); if left blank, a mode-specific default search term is used.
-- The app requests the browser's location permission and searches within roughly 8 km of the user's current location.
-- Each result shows the place name, address, open-now status (when available), star rating, and a mode-specific accessibility note.
-- The Physical Access Finder additionally looks up and displays Google's reported wheelchair-accessible-entrance status per result.
-- This feature requires a Google Cloud API key with the Places API enabled, configured in `app.js` (`GOOGLE_MAPS_API_KEY`). Until a real key is added, the finder shows a clear setup message instead of results.
-- If location access is denied, the browser does not support geolocation, or no results are found, the finder shows a plain-language error message explaining what went wrong.
 
 ### Deployment & Hosting
 
 - The application is a static client-side web application built with HTML, CSS, and JavaScript.
 - The web application is hosted using GitHub Pages directly from the `main` branch root folder (`/`).
 - GitHub Pages automatically serves `index.html` as the main entry point.
+- Google Analytics 4 is embedded in `index.html` with measurement ID `G-81VPL2W7ZM` and sends the standard page-view event. Analytics requests may be blocked by browser privacy settings, extensions, or network policy.
 
 ### Known Limitations: Reminder Alarms On Phones
 

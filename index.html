@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#162a3a" />
     <title>Stability | Your disability assistant</title>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-81VPL2W7ZM"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { window.dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-81VPL2W7ZM');
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
@@ -29,28 +36,34 @@
               <h1 id="pageTitle" class="splash-title">Stability</h1>
               <p class="splash-tagline">A calmer way through the day</p>
               <p class="intro">Open a mode, then choose one focused tool. Everything stays close, clear, and ready when you are.</p>
-              <button class="primary-button open-app-button" id="openAppButton" type="button">Open app</button>
+              <div class="action-row splash-actions"><button class="primary-button open-app-button" id="openAppButton" type="button">Open app</button><button class="secondary-button open-app-button" id="aboutAppButton" type="button">About the App</button></div>
             </div>
             <div class="today-note"><span class="sun-mark" aria-hidden="true">/</span><span><strong id="dateLabel">Today</strong><small>Your tools are saved on this device.</small></span></div>
           </section>
+        </section>
 
+        <section class="screen about-screen" id="screenAbout" hidden>
+          <button class="secondary-button back-button" data-action="back-to-home" type="button">&larr; Back to home</button>
           <section class="splash-modes-preview" aria-labelledby="splashModesHeading">
             <h2 id="splashModesHeading" class="splash-modes-heading">Three modes, one app</h2>
             <div class="splash-mode-cards">
               <div class="splash-mode-card">
                 <span class="mode-number">01</span>
+                <span class="card-art" aria-hidden="true">&#129504;</span>
                 <strong>Cognitive</strong>
                 <p>For memory, focus, and daily routines. Reminders, medication tracking, mood check-ins, mindfulness, and gentle brain-training games.</p>
               </div>
               <div class="splash-mode-card">
                 <span class="mode-number">02</span>
+                <span class="card-art" aria-hidden="true">&#129309;</span>
                 <strong>Motor</strong>
                 <p>For tremors and limited movement. Bigger touch targets, voice control, guided mobility stretches, and motor-skill games.</p>
               </div>
               <div class="splash-mode-card">
                 <span class="mode-number">03</span>
+                <span class="card-art" aria-hidden="true">&#128483;</span>
                 <strong>Speech</strong>
-                <p>For easier communication. A text-to-speech conversation board, guided speech practice, and speech-friendly place finder.</p>
+                <p>For easier communication. A text-to-speech conversation board and guided speech practice.</p>
               </div>
             </div>
           </section>
@@ -59,9 +72,9 @@
         <section class="screen modes-screen" id="screenModes" hidden aria-labelledby="modesHeading">
           <div class="sidebar-heading"><p class="eyebrow">Step 1 of 3</p><h2 id="modesHeading">Choose a mode</h2><p class="intro">Pick the kind of support you need right now.</p></div>
           <nav class="mode-navigation" aria-label="Support modes">
-            <button class="mode-button is-active" data-mode="cognitive" type="button"><span class="mode-number">01</span><span><strong>Cognitive</strong><small>mind, memory, routines</small></span><span class="arrow" aria-hidden="true">&rarr;</span></button>
-            <button class="mode-button" data-mode="motor" type="button"><span class="mode-number">02</span><span><strong>Motor</strong><small>movement, access, control</small></span><span class="arrow" aria-hidden="true">&rarr;</span></button>
-            <button class="mode-button" data-mode="speech" type="button"><span class="mode-number">03</span><span><strong>Speech</strong><small>communicate, practice, connect</small></span><span class="arrow" aria-hidden="true">&rarr;</span></button>
+            <button class="mode-button is-active" data-mode="cognitive" type="button"><span class="mode-number">01</span><span class="mode-art" aria-hidden="true">&#129504;</span><span><strong>Cognitive</strong><small>mind, memory, routines</small></span><span class="arrow" aria-hidden="true">&rarr;</span></button>
+            <button class="mode-button" data-mode="motor" type="button"><span class="mode-number">02</span><span class="mode-art" aria-hidden="true">&#129309;</span><span><strong>Motor</strong><small>movement, access, control</small></span><span class="arrow" aria-hidden="true">&rarr;</span></button>
+            <button class="mode-button" data-mode="speech" type="button"><span class="mode-number">03</span><span class="mode-art" aria-hidden="true">&#128483;</span><span><strong>Speech</strong><small>communicate, practice, connect</small></span><span class="arrow" aria-hidden="true">&rarr;</span></button>
           </nav>
         </section>
 
