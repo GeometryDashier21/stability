@@ -233,9 +233,8 @@ The app will initially support needs associated with these categories:
 #### Word Bank
 
 - Speech Mode provides a Word bank where users add hard or unfamiliar words they are learning; words are saved on the device, duplicates are rejected, and any word can be removed.
-- Tapping a saved word speaks it aloud (using the chosen conversation voice, if any) and shows its phonetic spelling and up to three definitions, looked up from the free Dictionary API (api.dictionaryapi.dev).
+- Tapping a saved word speaks it aloud (using the chosen conversation voice, if any).
 - The detail panel offers "Hear it" and "Hear it slowly" buttons to replay the pronunciation.
-- If no definition is found or the user is offline, a plain-language message is shown and the word can still be heard.
 
 #### Imagery
 
